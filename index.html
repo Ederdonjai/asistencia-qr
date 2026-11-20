@@ -372,6 +372,12 @@ $('lnkCambiar').onclick = e=>{
 };
 $('lnkActualizar').onclick = async e=>{
   e.preventDefault();
+  if(pendiente){
+    if(!confirm('Tienes cambios en este teléfono que NO se han guardado en la hoja.\n\n¿Descartarlos y ver lo que está en la hoja?')) return;
+    try{ localStorage.removeItem(claveBorrador()); }catch(err){}
+    pendiente = false;
+  }
+  desbloqueado = false;
   try{ usarLista(await llamar({accion:'lista', grupo:cfg.grupo, clave:cfg.clave})); dibujarLista(); consultarEstado(); mensaje($('resultado'),'Lista y asistencia actualizadas desde la hoja: '+alumnos.length+' alumnos.','ok'); }
   catch(err){ mensaje($('resultado'), err.message, 'mal'); }
 };
@@ -1034,26 +1040,38 @@ $('btnGuardar').onclick = ()=>enviar(false);
 async function enviar(forzar){
   const presentes = alumnos.filter(a=>marcas[llave(a)]).map(a=>({np:a.np, nombre:a.nombre, tipo:marcas[llave(a)]}));
   const faltan = alumnos.length - presentes.length;
+  // Alumnos que tenían algo en la hoja y en la página se dejaron en "—": esa casilla se BORRA en la hoja.
+  const borrar = [];
+  if(estadoDia && estadoDia.registrado){
+    const h = {}; (estadoDia.marcas||[]).forEach(x=>{ h[normalizar(x.nombre)] = x.valor; });
+    alumnos.forEach(a=>{ if(h[llave(a)] && !marcas[llave(a)]) borrar.push({np:a.np, nombre:a.nombre}); });
+  }
+  const sinCambios = ()=>{ try{ localStorage.removeItem(claveBorrador()); }catch(e){}
+    pendiente = false; desbloqueado = false; consultarEstado(); };
   // Día ya capturado: mostrar exactamente qué alumnos cambiarían y pedir confirmación.
   if(!forzar && estadoDia && estadoDia.registrado){
     const enHoja = {}; (estadoDia.marcas||[]).forEach(x=>{ enHoja[normalizar(x.nombre)] = x.valor; });
     const mf = $('marcarFaltas').checked, cambios = [];
     alumnos.forEach(a=>{
       const k = llave(a), antes = enHoja[k] || '', nuevo = marcas[k] || '';
-      const despues = nuevo || ((antes==='' || antes==='F') && mf ? 'F' : antes);   // así guarda el script
-      if(antes !== despues) cambios.push('• '+a.nombre+': '+(antes||'vacío')+' → '+despues);
+      const despues = nuevo || (antes ? '' : (mf ? 'F' : ''));   // así guarda el script ("—" borra la casilla)
+      if(antes !== despues) cambios.push('• '+a.nombre+': '+(antes||'vacío')+' → '+(despues||'VACÍO (se borra)'));
     });
-    if(!cambios.length){ mensaje($('resultado'),'No hay cambios: lo que ves ya es lo que está en la hoja.','ok'); return; }
-    if(!confirm('⚠ Este día ya estaba capturado. Se van a CAMBIAR '+cambios.length+' alumno(s):\n\n'+cambios.slice(0,15).join('\n')+
-                (cambios.length>15 ? '\n… y '+(cambios.length-15)+' más' : '')+'\n\n¿Confirmas estos cambios?')) return;
+    if(!cambios.length){ mensaje($('resultado'),'No hay cambios: lo que ves ya es lo que está en la hoja.','ok'); sinCambios(); return; }
+    const todoBorrado = borrar.length && !presentes.length;
+    if(!confirm((todoBorrado ? '⚠⚠ Se va a BORRAR TODA la asistencia de este día en la hoja ('+borrar.length+' alumnos).\n\n'
+                             : '⚠ Este día ya estaba capturado. Se van a CAMBIAR '+cambios.length+' alumno(s):\n\n'+cambios.slice(0,15).join('\n')+
+                (cambios.length>15 ? '\n… y '+(cambios.length-15)+' más' : '')+'\n\n')+'¿Confirmas?')) return;
   }
   else if(!forzar && $('marcarFaltas').checked && faltan>0 &&
      !confirm('Se pondrá F a '+faltan+' alumno(s) sin registro. ¿Continuar?')) return;
   $('btnGuardar').disabled = true; $('btnGuardar').textContent = 'Guardando…';
   try{
     const j = await llamar({accion:'guardar', grupo:cfg.grupo, clave:cfg.clave, fecha:$('fecha').value,
-                            presentes, marcarFaltas:$('marcarFaltas').checked, forzar:!!forzar}, true);
+                            presentes, borrar, marcarFaltas:$('marcarFaltas').checked, forzar:!!forzar}, true);
+    if(borrar.length && j.borrados === undefined) throw new Error('El script de Google todavía no tiene la versión que permite BORRAR. No se borró nada; instala el Code.gs nuevo y crea una Nueva versión de la implementación.');
     let t = 'Guardado en '+j.hoja+' ('+j.dia+' de '+j.mes.toLowerCase()+').\nAsistencias: '+j.asistencias+' · Retardos: '+j.retardos+' · Justificadas: '+(j.justificadas||0)+' · Faltas: '+j.faltas.length;
+    if(j.borrados) t += '\nCasillas borradas: '+j.borrados;
     if(j.faltas.length) t += '\nFaltaron: '+j.faltas.join(', ');
     if(j.noEncontrados.length) t += '\nNo encontrados en la hoja: '+j.noEncontrados.join(', ');
     mensaje($('resultado'), t, 'ok');
