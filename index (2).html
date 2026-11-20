@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asistencia QR · Telesecundaria No. 18</title>
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.7/dist/iife/reader/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<style>
+  /* ====== CONFIGURACIÓN VISUAL ====== */
+  :root{
+    --verde:#1f5f4a; --verde-claro:#e6f1ec; --rojo:#b3261e; --rojo-claro:#fbe9e7;
+    --ambar:#9a6700; --ambar-claro:#fff4d6; --gris:#5f6b66; --borde:#d9e0dc; --fondo:#f6f8f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--fondo);color:#1b2420}
+  header{background:var(--verde);color:#fff;padding:14px 16px}
+  header h1{margin:0;font-size:1.1rem}
+  header p{margin:2px 0 0;font-size:.85rem;opacity:.85}
+  main{max-width:760px;margin:0 auto;padding:12px}
+  .tarjeta{background:#fff;border:1px solid var(--borde);border-radius:12px;padding:14px;margin-bottom:12px}
+  label{display:block;font-size:.85rem;color:var(--gris);margin:8px 0 4px}
+  input,select{width:100%;padding:10px;border:1px solid var(--borde);border-radius:8px;font-size:1rem;background:#fff}
+  button{font:inherit;border:0;border-radius:8px;padding:11px 14px;cursor:pointer;font-weight:600}
+  .primario{background:var(--verde);color:#fff}
+  .secundario{background:var(--verde-claro);color:var(--verde)}
+  .peligro{background:var(--rojo-claro);color:var(--rojo)}
+  .fila{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .fila > *{flex:1}
+  .pestanas{display:flex;gap:6px;margin-bottom:12px}
+  .pestanas button{flex:1;background:#fff;border:1px solid var(--borde);color:var(--gris)}
+  .pestanas button.activa{background:var(--verde);color:#fff;border-color:var(--verde)}
+  #lector{position:relative;width:100%;border-radius:10px;overflow:hidden;background:#000}
+  #lector video,#lector canvas{display:block;width:100%;height:auto}
+  #lector canvas{position:absolute;inset:0;height:100%}
+  .aviso-prueba{background:var(--ambar-claro);color:var(--ambar);font-weight:600;text-align:center;padding:8px;border-radius:8px;margin-bottom:10px}
+  .credenciales.grande{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .credenciales.grande .cred .qr svg{max-width:300px}
+  .credenciales.grande .cred .nombre{font-size:1.05rem}
+  .ultimo{font-size:1.1rem;font-weight:700;text-align:center;padding:10px;border-radius:8px;margin-top:8px;display:none}
+  .ultimo.ok{display:block;background:var(--verde-claro);color:var(--verde)}
+  .ultimo.ret{display:block;background:var(--ambar-claro);color:var(--ambar)}
+  .ultimo.mal{display:block;background:var(--rojo-claro);color:var(--rojo)}
+  .contador{font-size:.95rem;color:var(--gris);margin:8px 0}
+  .contador b{color:#1b2420}
+  .interruptor{display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;background:var(--ambar-claro);color:var(--ambar);font-weight:600;margin-top:8px}
+  .interruptor input{width:22px;height:22px;flex:none}
+  .check{display:flex;align-items:center;gap:10px;font-size:.9rem;color:var(--gris);margin:10px 0}
+  .check input{width:20px;height:20px;flex:none}
+  ul.alumnos{list-style:none;margin:0;padding:0}
+  ul.alumnos li{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--borde);cursor:pointer;user-select:none}
+  ul.alumnos li .np{width:26px;color:var(--gris);font-size:.85rem;text-align:right}
+  ul.alumnos li .nom{flex:1;font-size:.95rem}
+  .chip{min-width:34px;text-align:center;border-radius:999px;padding:3px 8px;font-weight:700;font-size:.85rem;background:#eef1ef;color:#9aa5a0}
+  .chip.A{background:var(--verde-claro);color:var(--verde)}
+  .chip.R{background:var(--ambar-claro);color:var(--ambar)}
+  .ayuda{font-size:.8rem;color:var(--gris)}
+  .mensaje{padding:10px;border-radius:8px;margin-top:10px;font-size:.92rem;white-space:pre-line}
+  .mensaje.ok{background:var(--verde-claro);color:var(--verde)}
+  .mensaje.mal{background:var(--rojo-claro);color:var(--rojo)}
+  .oculto{display:none!important}
+
+  /* ====== CREDENCIALES ====== */
+  .credenciales{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:12px}
+  .cred{background:#fff;border:1.5px dashed #9aa5a0;border-radius:10px;padding:10px;text-align:center;page-break-inside:avoid;break-inside:avoid}
+  .cred .esc{font-size:.62rem;color:var(--gris);line-height:1.2}
+  .cred .qr svg{width:100%;height:auto;max-width:190px;display:block;margin:6px auto}
+  .cred .nombre{font-weight:700;font-size:.85rem;line-height:1.2}
+  .cred .grupo{font-size:.75rem;color:var(--gris);margin-top:2px}
+
+  @media print{
+    @page{size:letter;margin:10mm}
+    body{background:#fff}
+    header,.pestanas,#vistaLista,#vistaConfig,.no-imprimir{display:none!important}
+    main{max-width:none;padding:0}
+    .tarjeta{border:0;padding:0;margin:0}
+    .credenciales{grid-template-columns:repeat(3,1fr);gap:6mm}
+    .cred{border-radius:0;padding:4mm}
+    .cred .qr svg{max-width:52mm}
+    .credenciales.grande{grid-template-columns:repeat(2,1fr);gap:8mm}
+    .credenciales.grande .cred .qr svg{max-width:85mm}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Asistencia con QR</h1>
+  <p id="subtitulo">Escuela Telesecundaria No. 18 "Netzahualcóyotl"</p>
+</header>
+
+<main>
+  <!-- ====== CONFIGURACIÓN (grupo y clave) ====== -->
+  <section id="vistaConfig" class="tarjeta oculto">
+    <b>Configurar este teléfono</b>
+    <label for="cfgGrupo">Grupo</label>
+    <select id="cfgGrupo"></select>
+    <label for="cfgClave">Clave de la escuela</label>
+    <input id="cfgClave" type="password" autocomplete="off" placeholder="La que te dio el administrador">
+    <div class="fila" style="margin-top:12px">
+      <button class="primario" id="btnCfgGuardar">Guardar y cargar lista</button>
+    </div>
+    <div id="cfgMsg"></div>
+  </section>
+
+  <nav class="pestanas oculto" id="pestanas">
+    <button id="tabLista" class="activa">Pasar lista</button>
+    <button id="tabCred">Credenciales QR</button>
+  </nav>
+
+  <!-- ====== PASAR LISTA ====== -->
+  <section id="vistaLista" class="oculto">
+    <div class="tarjeta">
+      <div id="avisoPrueba" class="aviso-prueba oculto">MODO PRUEBA · se guarda en la copia, no en el formato real</div>
+      <div class="fila">
+        <div><label for="fecha">Fecha</label><input id="fecha" type="date"></div>
+      </div>
+      <div class="fila" style="margin-top:12px">
+        <button class="primario" id="btnCamara">Abrir cámara</button>
+      </div>
+      <p class="ayuda">La cámara reconoce varias credenciales a la vez. Pide al grupo que las levante y recorre el salón despacio, por filas. Cada alumno reconocido aparece en verde.</p>
+      <div id="lector" class="oculto" style="margin-top:10px"><video id="video" playsinline muted></video><canvas id="capa"></canvas></div>
+      <div id="ultimo" class="ultimo"></div>
+      <label class="interruptor"><input type="checkbox" id="modoRetardo"> Ya es hora de retardo (los siguientes se marcan R)</label>
+    </div>
+
+    <div class="tarjeta">
+      <div class="contador" id="contador"></div>
+      <p class="ayuda">Si un alumno olvidó su credencial, toca su nombre: — → A → R → —</p>
+      <ul class="alumnos" id="listaAlumnos"></ul>
+      <label class="check"><input type="checkbox" id="marcarFaltas" checked> Poner F a quien no se registró</label>
+      <div class="fila">
+        <button class="primario" id="btnGuardar">Guardar en la hoja de asistencia</button>
+      </div>
+      <div id="resultado"></div>
+    </div>
+    <p class="ayuda" style="text-align:center">Grupo <b id="pieGrupo"></b> · <a href="#" id="lnkCambiar">Cambiar grupo o clave</a></p>
+  </section>
+
+  <!-- ====== CREDENCIALES ====== -->
+  <section id="vistaCred" class="oculto">
+    <div class="tarjeta">
+      <div class="no-imprimir">
+        <b>Credenciales del grupo <span id="credGrupo"></span></b>
+        <p class="ayuda">Imprímelas en hoja carta (9 por hoja), recórtalas y, si puedes, enmícalas. Cada código ya trae el grupo y el nombre del alumno.</p>
+        <label for="tamano">Tamaño</label>
+        <select id="tamano">
+          <option value="normal">Normal · 9 por hoja (de cerca)</option>
+          <option value="grande" selected>Grande · 4 por hoja (todo el grupo a la vez)</option>
+        </select>
+        <div class="fila" style="margin-top:10px"><button class="primario" id="btnImprimir">Imprimir credenciales</button></div>
+      </div>
+      <div class="credenciales" id="credenciales"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ====== PEGA AQUÍ LA URL DE TU APLICACIÓN WEB DE APPS SCRIPT (termina en /exec) ====== */
+const URL_SCRIPT = 'https://script.google.com/macros/s/AKfycbyWmXPTX1tSLe5rRQpFLKX9WTeT-YHsu4cEEPBT287xi3xMc5JQIT1iQ2f5gMwJ4USA/exec';
+
+const GRUPOS = ['PRUEBA'];
+const PREFIJO = 'T18';   // corto a propósito: menos datos = cuadros más grandes y legibles de lejos
+const $ = id => document.getElementById(id);
+
+let cfg = leer('asis_cfg') || {};
+let alumnos = [];          // [{np, nombre}]
+let marcas = {};           // np -> 'A' | 'R'
+let flujo = null, detectar = null, camaraActiva = false, ocupado = false;
+const vistos = new Map();  // texto del QR -> última vez que se avisó (evita avisos repetidos)
+
+/* ---------- utilidades ---------- */
+function leer(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function normalizar(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); }
+function hoyISO(){ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+function claveBorrador(){ return 'asis_borrador_'+cfg.grupo+'_'+$('fecha').value; }
+function mensaje(el, texto, tipo){ el.innerHTML=''; const d=document.createElement('div'); d.className='mensaje '+tipo; d.textContent=texto; el.appendChild(d); }
+
+async function llamar(params, post){
+  if(URL_SCRIPT.indexOf('http')!==0) throw new Error('Falta pegar la URL del script en el archivo index.html.');
+  let r;
+  if(post){
+    r = await fetch(URL_SCRIPT, {method:'POST', body: JSON.stringify(params)});
+  }else{
+    r = await fetch(URL_SCRIPT + '?' + new URLSearchParams(params).toString());
+  }
+  const j = await r.json();
+  if(!j.ok) { const e = new Error(j.error||'Error desconocido'); e.datos=j; throw e; }
+  return j;
+}
+
+let audio=null;
+function pitido(ok){
+  try{
+    audio = audio || new (window.AudioContext||window.webkitAudioContext)();
+    const o=audio.createOscillator(), g=audio.createGain();
+    o.frequency.value = ok ? 880 : 220; g.gain.value=.15;
+    o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime + (ok?.12:.3));
+  }catch(e){}
+  if(navigator.vibrate) navigator.vibrate(ok?60:[80,60,80]);
+}
+
+/* ---------- configuración ---------- */
+GRUPOS.forEach(g=>{ const o=document.createElement('option'); o.value=g; o.textContent=g; $('cfgGrupo').appendChild(o); });
+
+function mostrarConfig(){
+  $('vistaConfig').classList.remove('oculto');
+  ['pestanas','vistaLista','vistaCred'].forEach(id=>$(id).classList.add('oculto'));
+  if(cfg.grupo) $('cfgGrupo').value = cfg.grupo;
+  if(cfg.clave) $('cfgClave').value = cfg.clave;
+}
+
+$('btnCfgGuardar').onclick = async ()=>{
+  const nuevo = {grupo:$('cfgGrupo').value, clave:$('cfgClave').value.trim()};
+  if(!nuevo.clave){ mensaje($('cfgMsg'),'Escribe la clave.','mal'); return; }
+  $('btnCfgGuardar').disabled = true;
+  try{
+    const j = await llamar({accion:'lista', grupo:nuevo.grupo, clave:nuevo.clave});
+    cfg = nuevo; escribir('asis_cfg', cfg);
+    usarLista(j);
+    iniciarApp();
+  }catch(e){ mensaje($('cfgMsg'), e.message, 'mal'); }
+  $('btnCfgGuardar').disabled = false;
+};
+
+$('lnkCambiar').onclick = e=>{ e.preventDefault(); detenerCamara(); mostrarConfig(); };
+
+function usarLista(j){
+  alumnos = j.alumnos || [];
+  escribir('asis_lista_'+cfg.grupo, {alumnos, docente:j.docente||''});
+  $('subtitulo').textContent = 'Grupo ' + cfg.grupo + (j.docente ? ' · ' + j.docente : '');
+}
+
+async function cargarLista(){
+  const guardada = leer('asis_lista_'+cfg.grupo);
+  if(guardada){ usarLista(guardada); }
+  try{ usarLista(await llamar({accion:'lista', grupo:cfg.grupo, clave:cfg.clave})); }
+  catch(e){ if(!guardada) throw e; }
+}
+
+function iniciarApp(){
+  $('vistaConfig').classList.add('oculto');
+  $('pestanas').classList.remove('oculto');
+  $('pieGrupo').textContent = cfg.grupo;
+  $('credGrupo').textContent = cfg.grupo;
+  $('avisoPrueba').classList.toggle('oculto', cfg.grupo !== 'PRUEBA');
+  if(!$('fecha').value) $('fecha').value = hoyISO();
+  cargarBorrador();
+  verPestana('lista');
+}
+
+/* ---------- pestañas ---------- */
+function verPestana(p){
+  $('tabLista').classList.toggle('activa', p==='lista');
+  $('tabCred').classList.toggle('activa', p==='cred');
+  $('vistaLista').classList.toggle('oculto', p!=='lista');
+  $('vistaCred').classList.toggle('oculto', p!=='cred');
+  if(p==='cred'){ detenerCamara(); dibujarCredenciales(); }
+}
+$('tabLista').onclick = ()=>verPestana('lista');
+$('tabCred').onclick = ()=>verPestana('cred');
+
+/* ---------- lista y marcas ---------- */
+function cargarBorrador(){ marcas = leer(claveBorrador()) || {}; $('resultado').innerHTML=''; dibujarLista(); }
+$('fecha').onchange = cargarBorrador;
+
+function dibujarLista(){
+  const ul = $('listaAlumnos'); ul.innerHTML='';
+  let a=0, r=0;
+  alumnos.forEach(al=>{
+    const m = marcas[al.np] || '';
+    if(m==='A') a++; if(m==='R') r++;
+    const li=document.createElement('li');
+    li.innerHTML = '<span class="np"></span><span class="nom"></span><span class="chip '+m+'">'+(m||'—')+'</span>';
+    li.querySelector('.np').textContent = al.np;
+    li.querySelector('.nom').textContent = al.nombre;
+    li.onclick = ()=>{ const sig = {'':'A','A':'R','R':''}[m]; if(sig) marcas[al.np]=sig; else delete marcas[al.np]; guardarBorrador(); };
+    ul.appendChild(li);
+  });
+  const total = alumnos.length;
+  $('contador').innerHTML = 'Registrados: <b>'+(a+r)+' de '+total+'</b> · A: '+a+' · R: '+r+' · Sin registro: '+(total-a-r);
+}
+function guardarBorrador(){ escribir(claveBorrador(), marcas); dibujarLista(); }
+
+/* ---------- cámara (varias credenciales a la vez) ---------- */
+$('btnCamara').onclick = ()=> camaraActiva ? detenerCamara() : abrirCamara();
+
+async function crearDetector(){
+  // 1) Detector nativo del navegador (Chrome en Android): rápido y lee varios códigos por cuadro.
+  if('BarcodeDetector' in window){
+    try{
+      const f = await BarcodeDetector.getSupportedFormats();
+      if(f.includes('qr_code')){
+        const d = new BarcodeDetector({formats:['qr_code']});
+        return async v => (await d.detect(v)).map(b=>({texto:b.rawValue, pts:b.cornerPoints}));
+      }
+    }catch(e){}
+  }
+  // 2) Respaldo para iPhone y otros navegadores: ZXing (WebAssembly), también lee varios a la vez.
+  const lienzo = document.createElement('canvas'), ctx = lienzo.getContext('2d', {willReadFrequently:true});
+  return async v => {
+    lienzo.width = v.videoWidth; lienzo.height = v.videoHeight;
+    ctx.drawImage(v, 0, 0);
+    const r = await ZXingWASM.readBarcodes(ctx.getImageData(0,0,lienzo.width,lienzo.height),
+                                           {formats:['QRCode'], maxNumberOfSymbols:60, tryHarder:true});
+    return r.filter(x=>x.isValid).map(x=>({texto:x.text,
+      pts:[x.position.topLeft, x.position.topRight, x.position.bottomRight, x.position.bottomLeft]}));
+  };
+}
+
+async function abrirCamara(){
+  try{
+    detectar = detectar || await crearDetector();
+    flujo = await navigator.mediaDevices.getUserMedia({audio:false,
+      video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}});
+    const v = $('video'); v.srcObject = flujo; await v.play();
+    $('lector').classList.remove('oculto');
+    camaraActiva = true; $('btnCamara').textContent='Cerrar cámara'; $('btnCamara').className='peligro';
+    ciclo();
+  }catch(e){ mostrarUltimo('No se pudo abrir la cámara. Revisa el permiso del navegador.','mal'); }
+}
+
+function detenerCamara(){
+  if(flujo) flujo.getTracks().forEach(t=>t.stop());
+  flujo = null; camaraActiva = false;
+  $('lector').classList.add('oculto');
+  $('btnCamara').textContent='Abrir cámara'; $('btnCamara').className='primario';
+}
+
+async function ciclo(){
+  if(!camaraActiva) return;
+  const v = $('video');
+  if(!ocupado && v.readyState >= 2 && v.videoWidth){
+    ocupado = true;
+    try{
+      const res = await detectar(v);
+      const etiquetas = res.map(x=>({pts:x.pts, ...registrar(x.texto)}));
+      dibujarCapa(v, etiquetas);
+    }catch(e){}
+    ocupado = false;
+  }
+  setTimeout(ciclo, 120);
+}
+
+function dibujarCapa(v, etiquetas){
+  const c = $('capa'), ctx = c.getContext('2d');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  ctx.clearRect(0,0,c.width,c.height);
+  const grosor = Math.max(3, c.width/300);
+  ctx.font = 'bold '+Math.round(c.width/45)+'px system-ui, sans-serif';
+  etiquetas.forEach(e=>{
+    if(!e.pts || !e.pts.length) return;
+    const color = e.tipo==='mal' ? '#e53935' : (e.tipo==='ret' ? '#f2a900' : '#2ecc71');
+    ctx.strokeStyle = color; ctx.lineWidth = grosor; ctx.beginPath();
+    e.pts.forEach((p,i)=> i ? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y)); ctx.closePath(); ctx.stroke();
+    const x = Math.min(...e.pts.map(p=>p.x)), y = Math.min(...e.pts.map(p=>p.y)) - grosor*2;
+    const w = ctx.measureText(e.corto).width + 12, h = c.width/40;
+    ctx.fillStyle = color; ctx.fillRect(x, y-h, w, h+4);
+    ctx.fillStyle = '#fff'; ctx.fillText(e.corto, x+6, y-4);
+  });
+}
+
+function mostrarUltimo(t, tipo){ const u=$('ultimo'); u.textContent=t; u.className='ultimo '+tipo; }
+
+function huella(nombre){            // 4 caracteres que identifican el nombre (por si cambia el N.L.)
+  let h = 5381; const n = normalizar(nombre);
+  for(let i=0;i<n.length;i++) h = ((h<<5) + h + n.charCodeAt(i)) >>> 0;
+  return h.toString(36).toUpperCase().slice(-4).padStart(4,'0');
+}
+function nombreCorto(al){ const n = String(al.nombre); return al.np+'. '+(n.length>22 ? n.slice(0,21)+'…' : n); }
+
+/* Procesa un código leído. Devuelve {tipo, corto} para dibujarlo sobre la imagen. */
+function registrar(texto){
+  const ahora = Date.now(), avisar = !(vistos.get(texto) > ahora - 4000);
+  if(avisar) vistos.set(texto, ahora);
+
+  const p = texto.split('|');
+  if(p.length < 4 || (p[0]!==PREFIJO && p[0]!=='TS18')){
+    if(avisar){ pitido(false); mostrarUltimo('Ese código no es una credencial de asistencia.','mal'); }
+    return {tipo:'mal', corto:'¿?'};
+  }
+  const grupo = p[1], np = p[2], dato = p.slice(3).join('|');
+  if(grupo !== cfg.grupo){
+    if(avisar){ pitido(false); mostrarUltimo('Credencial de otro grupo ('+grupo+')','mal'); }
+    return {tipo:'mal', corto:'Grupo '+grupo};
+  }
+  let al;
+  if(/^[0-9A-Z]{4}$/.test(dato)){   // credencial corta: grupo | N.L. | huella del nombre
+    al = alumnos.find(x=>String(x.np)===String(np) && huella(x.nombre)===dato) || alumnos.find(x=>huella(x.nombre)===dato);
+  }else{                            // credencial larga (versión anterior): trae el nombre completo
+    const n = normalizar(dato);
+    al = alumnos.find(x=>normalizar(x.nombre)===n) || alumnos.find(x=>String(x.np)===String(np));
+  }
+  if(!al){
+    if(avisar){ pitido(false); mostrarUltimo('Credencial que no coincide con la lista (N.L. '+np+')','mal'); }
+    return {tipo:'mal', corto:'N.L. '+np+' ?'};
+  }
+  if(!marcas[al.np]){
+    marcas[al.np] = $('modoRetardo').checked ? 'R' : 'A';
+    guardarBorrador(); pitido(true);
+    mostrarUltimo((marcas[al.np]==='R'?'Retardo · ':'✓ ')+al.nombre, marcas[al.np]==='R'?'ret':'ok');
+  }
+  return {tipo: marcas[al.np]==='R' ? 'ret' : 'ok', corto: nombreCorto(al)};
+}
+
+/* ---------- guardar en Sheets ---------- */
+$('btnGuardar').onclick = ()=>enviar(false);
+
+async function enviar(forzar){
+  const presentes = alumnos.filter(a=>marcas[a.np]).map(a=>({np:a.np, nombre:a.nombre, tipo:marcas[a.np]}));
+  const faltan = alumnos.length - presentes.length;
+  if(!forzar && $('marcarFaltas').checked && faltan>0 &&
+     !confirm('Se pondrá F a '+faltan+' alumno(s) sin registro. ¿Continuar?')) return;
+  $('btnGuardar').disabled = true; $('btnGuardar').textContent = 'Guardando…';
+  try{
+    const j = await llamar({accion:'guardar', grupo:cfg.grupo, clave:cfg.clave, fecha:$('fecha').value,
+                            presentes, marcarFaltas:$('marcarFaltas').checked, forzar:!!forzar}, true);
+    let t = 'Guardado en '+j.hoja+' ('+j.dia+' de '+j.mes.toLowerCase()+').\nAsistencias: '+j.asistencias+' · Retardos: '+j.retardos+' · Faltas: '+j.faltas.length;
+    if(j.faltas.length) t += '\nFaltaron: '+j.faltas.join(', ');
+    if(j.noEncontrados.length) t += '\nNo encontrados en la hoja: '+j.noEncontrados.join(', ');
+    mensaje($('resultado'), t, 'ok');
+  }catch(e){
+    if(e.datos && e.datos.incidencia && confirm(e.message+'\n\n¿Guardar de todos modos?')){ $('btnGuardar').disabled=false; $('btnGuardar').textContent='Guardar en la hoja de asistencia'; return enviar(true); }
+    mensaje($('resultado'), e.message + '\nLos registros siguen guardados en este teléfono; puedes intentar de nuevo.', 'mal');
+  }
+  $('btnGuardar').disabled = false; $('btnGuardar').textContent = 'Guardar en la hoja de asistencia';
+}
+
+/* ---------- credenciales ---------- */
+function textoQR(al){ return [PREFIJO, cfg.grupo, al.np, huella(al.nombre)].join('|'); }  // código corto = cuadros más grandes
+
+function dibujarCredenciales(){
+  const cont = $('credenciales'); cont.innerHTML='';
+  cont.classList.toggle('grande', $('tamano').value==='grande');
+  alumnos.forEach(al=>{
+    const q = qrcode(0,'M'); q.addData(textoQR(al)); q.make();
+    const d = document.createElement('div'); d.className='cred';
+    d.innerHTML = '<div class="esc">Esc. Telesecundaria No. 18 "Netzahualcóyotl"</div>'
+                + '<div class="qr">'+q.createSvgTag({cellSize:4, margin:2, scalable:true})+'</div>'
+                + '<div class="nombre"></div><div class="grupo"></div>';
+    d.querySelector('.nombre').textContent = al.nombre;
+    d.querySelector('.grupo').textContent = 'Grupo '+cfg.grupo+' · N.L. '+al.np;
+    cont.appendChild(d);
+  });
+}
+$('btnImprimir').onclick = ()=>window.print();
+$('tamano').onchange = dibujarCredenciales;
+
+/* ---------- inicio ---------- */
+(async function(){
+  if(cfg.grupo && cfg.clave){
+    try{ await cargarLista(); iniciarApp(); }
+    catch(e){ mostrarConfig(); mensaje($('cfgMsg'), e.message, 'mal'); }
+  }else mostrarConfig();
+})();
+</script>
+</body>
+</html>
