@@ -54,6 +54,7 @@
   .chip{min-width:34px;text-align:center;border-radius:999px;padding:3px 8px;font-weight:700;font-size:.85rem;background:#eef1ef;color:#9aa5a0}
   .chip.A{background:var(--verde-claro);color:var(--verde)}
   .chip.R{background:var(--ambar-claro);color:var(--ambar)}
+  .chip.J{background:#e3edfb;color:#1d4f91}
   .ayuda{font-size:.8rem;color:var(--gris)}
   .mensaje{padding:10px;border-radius:8px;margin-top:10px;font-size:.92rem;white-space:pre-line}
   .mensaje.ok{background:var(--verde-claro);color:var(--verde)}
@@ -92,12 +93,14 @@
   <!-- ====== CONFIGURACIÓN (grupo y clave) ====== -->
   <section id="vistaConfig" class="tarjeta oculto">
     <b>Configurar este teléfono</b>
-    <label for="cfgGrupo">Grupo</label>
-    <select id="cfgGrupo"></select>
-    <label for="cfgClave">Clave de la escuela</label>
+    <label for="cfgClave">Clave de tu grupo</label>
     <input id="cfgClave" type="password" autocomplete="off" placeholder="La que te dio el administrador">
+    <div id="cajaGrupo" class="oculto">
+      <label for="cfgGrupo">Grupo</label>
+      <select id="cfgGrupo"></select>
+    </div>
     <div class="fila" style="margin-top:12px">
-      <button class="primario" id="btnCfgGuardar">Guardar y cargar lista</button>
+      <button class="primario" id="btnCfgGuardar">Entrar</button>
     </div>
     <div id="cfgMsg"></div>
   </section>
@@ -125,7 +128,7 @@
 
     <div class="tarjeta">
       <div class="contador" id="contador"></div>
-      <p class="ayuda">Si un alumno olvidó su credencial, toca su nombre: — → A → R → —</p>
+      <p class="ayuda">Toca un nombre para marcarlo a mano: — → A (asistencia) → R (retardo) → J (justificada) → —</p>
       <ul class="alumnos" id="listaAlumnos"></ul>
       <label class="check"><input type="checkbox" id="marcarFaltas" checked> Poner F a quien no se registró</label>
       <div class="fila">
@@ -133,7 +136,7 @@
       </div>
       <div id="resultado"></div>
     </div>
-    <p class="ayuda" style="text-align:center">Grupo <b id="pieGrupo"></b> · <a href="#" id="lnkCambiar">Cambiar grupo o clave</a></p>
+    <p class="ayuda" style="text-align:center">Grupo <b id="pieGrupo"></b> · <a href="#" id="lnkActualizar">Actualizar lista</a> · <a href="#" id="lnkCambiar">Cambiar de clave</a></p>
   </section>
 
   <!-- ====== CREDENCIALES ====== -->
@@ -141,12 +144,14 @@
     <div class="tarjeta">
       <div class="no-imprimir">
         <b>Credenciales del grupo <span id="credGrupo"></span></b>
-        <p class="ayuda">Imprímelas en hoja carta (9 por hoja), recórtalas y, si puedes, enmícalas. Cada código ya trae el grupo y el nombre del alumno.</p>
+        <p class="ayuda">Recórtalas y, si puedes, enmícalas. Si llega un alumno nuevo, elige solo su nombre en "Imprimir". Las credenciales siguen sirviendo aunque cambie el número de lista.</p>
         <label for="tamano">Tamaño</label>
         <select id="tamano">
           <option value="normal">Normal · 9 por hoja (de cerca)</option>
           <option value="grande" selected>Grande · 4 por hoja (todo el grupo a la vez)</option>
         </select>
+        <label for="credAlumno">Imprimir</label>
+        <select id="credAlumno"><option value="">Todo el grupo</option></select>
         <div class="fila" style="margin-top:10px"><button class="primario" id="btnImprimir">Imprimir credenciales</button></div>
       </div>
       <div class="credenciales" id="credenciales"></div>
@@ -158,7 +163,6 @@
 /* ====== PEGA AQUÍ LA URL DE TU APLICACIÓN WEB DE APPS SCRIPT (termina en /exec) ====== */
 const URL_SCRIPT = 'https://script.google.com/macros/s/AKfycbyWmXPTX1tSLe5rRQpFLKX9WTeT-YHsu4cEEPBT287xi3xMc5JQIT1iQ2f5gMwJ4USA/exec';
 
-const GRUPOS = ['PRUEBA'];
 const PREFIJO = 'T18';   // corto a propósito: menos datos = cuadros más grandes y legibles de lejos
 const $ = id => document.getElementById(id);
 
@@ -173,6 +177,7 @@ function leer(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ re
 function escribir(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 function normalizar(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); }
 function hoyISO(){ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+function llave(al){ return normalizar(al.nombre); }   // las marcas se guardan por nombre: el N.L. cambia con altas y bajas
 function claveBorrador(){ return 'asis_borrador_'+cfg.grupo+'_'+$('fecha').value; }
 function mensaje(el, texto, tipo){ el.innerHTML=''; const d=document.createElement('div'); d.className='mensaje '+tipo; d.textContent=texto; el.appendChild(d); }
 
@@ -201,41 +206,60 @@ function pitido(ok){
 }
 
 /* ---------- configuración ---------- */
-GRUPOS.forEach(g=>{ const o=document.createElement('option'); o.value=g; o.textContent=g; $('cfgGrupo').appendChild(o); });
-
 function mostrarConfig(){
   $('vistaConfig').classList.remove('oculto');
   ['pestanas','vistaLista','vistaCred'].forEach(id=>$(id).classList.add('oculto'));
-  if(cfg.grupo) $('cfgGrupo').value = cfg.grupo;
-  if(cfg.clave) $('cfgClave').value = cfg.clave;
+  $('cajaGrupo').classList.add('oculto'); $('cfgMsg').innerHTML='';
+  $('cfgClave').value = '';
+}
+
+async function entrarConGrupo(grupo, clave){
+  const j = await llamar({accion:'lista', grupo, clave});
+  cfg = {grupo, clave}; escribir('asis_cfg', cfg);
+  usarLista(j); iniciarApp();
 }
 
 $('btnCfgGuardar').onclick = async ()=>{
-  const nuevo = {grupo:$('cfgGrupo').value, clave:$('cfgClave').value.trim()};
-  if(!nuevo.clave){ mensaje($('cfgMsg'),'Escribe la clave.','mal'); return; }
+  const clave = $('cfgClave').value.trim();
+  if(!clave){ mensaje($('cfgMsg'),'Escribe la clave.','mal'); return; }
   $('btnCfgGuardar').disabled = true;
   try{
-    const j = await llamar({accion:'lista', grupo:nuevo.grupo, clave:nuevo.clave});
-    cfg = nuevo; escribir('asis_cfg', cfg);
-    usarLista(j);
-    iniciarApp();
+    if(!$('cajaGrupo').classList.contains('oculto') && $('cfgGrupo').value){
+      await entrarConGrupo($('cfgGrupo').value, clave);          // administrador ya eligió grupo
+    }else{
+      const j = await llamar({accion:'entrar', clave});
+      if(j.grupos.length === 1){ await entrarConGrupo(j.grupos[0], clave); }
+      else{                                                      // clave de administrador: elige grupo
+        $('cfgGrupo').innerHTML = '';
+        j.grupos.forEach(g=>{ const o=document.createElement('option'); o.value=g; o.textContent=g; $('cfgGrupo').appendChild(o); });
+        $('cajaGrupo').classList.remove('oculto');
+        mensaje($('cfgMsg'),'Clave de administrador: elige el grupo y presiona Entrar.','ok');
+      }
+    }
   }catch(e){ mensaje($('cfgMsg'), e.message, 'mal'); }
   $('btnCfgGuardar').disabled = false;
 };
 
 $('lnkCambiar').onclick = e=>{ e.preventDefault(); detenerCamara(); mostrarConfig(); };
+$('lnkActualizar').onclick = async e=>{
+  e.preventDefault();
+  try{ usarLista(await llamar({accion:'lista', grupo:cfg.grupo, clave:cfg.clave})); dibujarLista(); mensaje($('resultado'),'Lista actualizada: '+alumnos.length+' alumnos.','ok'); }
+  catch(err){ mensaje($('resultado'), err.message, 'mal'); }
+};
 
 function usarLista(j){
   alumnos = j.alumnos || [];
   escribir('asis_lista_'+cfg.grupo, {alumnos, docente:j.docente||''});
   $('subtitulo').textContent = 'Grupo ' + cfg.grupo + (j.docente ? ' · ' + j.docente : '');
+  const sel = $('credAlumno'); sel.innerHTML = '<option value="">Todo el grupo</option>';
+  alumnos.forEach(al=>{ const o=document.createElement('option'); o.value=al.np; o.textContent=al.np+'. '+al.nombre; sel.appendChild(o); });
 }
 
 async function cargarLista(){
   const guardada = leer('asis_lista_'+cfg.grupo);
   if(guardada){ usarLista(guardada); }
   try{ usarLista(await llamar({accion:'lista', grupo:cfg.grupo, clave:cfg.clave})); }
-  catch(e){ if(!guardada) throw e; }
+  catch(e){ if(!guardada || /clave/i.test(e.message)) throw e; }   // sin internet usa la lista guardada; con clave inválida pide entrar de nuevo
 }
 
 function iniciarApp(){
@@ -266,19 +290,19 @@ $('fecha').onchange = cargarBorrador;
 
 function dibujarLista(){
   const ul = $('listaAlumnos'); ul.innerHTML='';
-  let a=0, r=0;
+  let a=0, r=0, jj=0;
   alumnos.forEach(al=>{
-    const m = marcas[al.np] || '';
-    if(m==='A') a++; if(m==='R') r++;
+    const m = marcas[llave(al)] || '';
+    if(m==='A') a++; if(m==='R') r++; if(m==='J') jj++;
     const li=document.createElement('li');
     li.innerHTML = '<span class="np"></span><span class="nom"></span><span class="chip '+m+'">'+(m||'—')+'</span>';
     li.querySelector('.np').textContent = al.np;
     li.querySelector('.nom').textContent = al.nombre;
-    li.onclick = ()=>{ const sig = {'':'A','A':'R','R':''}[m]; if(sig) marcas[al.np]=sig; else delete marcas[al.np]; guardarBorrador(); };
+    li.onclick = ()=>{ const sig = {'':'A','A':'R','R':'J','J':''}[m]; if(sig) marcas[llave(al)]=sig; else delete marcas[llave(al)]; guardarBorrador(); };
     ul.appendChild(li);
   });
   const total = alumnos.length;
-  $('contador').innerHTML = 'Registrados: <b>'+(a+r)+' de '+total+'</b> · A: '+a+' · R: '+r+' · Sin registro: '+(total-a-r);
+  $('contador').innerHTML = 'Registrados: <b>'+(a+r+jj)+' de '+total+'</b> · A: '+a+' · R: '+r+' · J: '+jj+' · Sin registro: '+(total-a-r-jj);
 }
 function guardarBorrador(){ escribir(claveBorrador(), marcas); dibujarLista(); }
 
@@ -395,19 +419,19 @@ function registrar(texto){
     if(avisar){ pitido(false); mostrarUltimo('Credencial que no coincide con la lista (N.L. '+np+')','mal'); }
     return {tipo:'mal', corto:'N.L. '+np+' ?'};
   }
-  if(!marcas[al.np]){
-    marcas[al.np] = $('modoRetardo').checked ? 'R' : 'A';
+  if(!marcas[llave(al)]){
+    marcas[llave(al)] = $('modoRetardo').checked ? 'R' : 'A';
     guardarBorrador(); pitido(true);
-    mostrarUltimo((marcas[al.np]==='R'?'Retardo · ':'✓ ')+al.nombre, marcas[al.np]==='R'?'ret':'ok');
+    mostrarUltimo((marcas[llave(al)]==='R'?'Retardo · ':'✓ ')+al.nombre, marcas[llave(al)]==='R'?'ret':'ok');
   }
-  return {tipo: marcas[al.np]==='R' ? 'ret' : 'ok', corto: nombreCorto(al)};
+  return {tipo: marcas[llave(al)]==='R' ? 'ret' : 'ok', corto: nombreCorto(al)};
 }
 
 /* ---------- guardar en Sheets ---------- */
 $('btnGuardar').onclick = ()=>enviar(false);
 
 async function enviar(forzar){
-  const presentes = alumnos.filter(a=>marcas[a.np]).map(a=>({np:a.np, nombre:a.nombre, tipo:marcas[a.np]}));
+  const presentes = alumnos.filter(a=>marcas[llave(a)]).map(a=>({np:a.np, nombre:a.nombre, tipo:marcas[llave(a)]}));
   const faltan = alumnos.length - presentes.length;
   if(!forzar && $('marcarFaltas').checked && faltan>0 &&
      !confirm('Se pondrá F a '+faltan+' alumno(s) sin registro. ¿Continuar?')) return;
@@ -415,7 +439,7 @@ async function enviar(forzar){
   try{
     const j = await llamar({accion:'guardar', grupo:cfg.grupo, clave:cfg.clave, fecha:$('fecha').value,
                             presentes, marcarFaltas:$('marcarFaltas').checked, forzar:!!forzar}, true);
-    let t = 'Guardado en '+j.hoja+' ('+j.dia+' de '+j.mes.toLowerCase()+').\nAsistencias: '+j.asistencias+' · Retardos: '+j.retardos+' · Faltas: '+j.faltas.length;
+    let t = 'Guardado en '+j.hoja+' ('+j.dia+' de '+j.mes.toLowerCase()+').\nAsistencias: '+j.asistencias+' · Retardos: '+j.retardos+' · Justificadas: '+(j.justificadas||0)+' · Faltas: '+j.faltas.length;
     if(j.faltas.length) t += '\nFaltaron: '+j.faltas.join(', ');
     if(j.noEncontrados.length) t += '\nNo encontrados en la hoja: '+j.noEncontrados.join(', ');
     mensaje($('resultado'), t, 'ok');
@@ -432,7 +456,8 @@ function textoQR(al){ return [PREFIJO, cfg.grupo, al.np, huella(al.nombre)].join
 function dibujarCredenciales(){
   const cont = $('credenciales'); cont.innerHTML='';
   cont.classList.toggle('grande', $('tamano').value==='grande');
-  alumnos.forEach(al=>{
+  const solo = $('credAlumno').value;
+  alumnos.filter(al=>!solo || String(al.np)===solo).forEach(al=>{
     const q = qrcode(0,'M'); q.addData(textoQR(al)); q.make();
     const d = document.createElement('div'); d.className='cred';
     d.innerHTML = '<div class="esc">Esc. Telesecundaria No. 18 "Netzahualcóyotl"</div>'
@@ -445,6 +470,7 @@ function dibujarCredenciales(){
 }
 $('btnImprimir').onclick = ()=>window.print();
 $('tamano').onchange = dibujarCredenciales;
+$('credAlumno').onchange = dibujarCredenciales;
 
 /* ---------- inicio ---------- */
 (async function(){
