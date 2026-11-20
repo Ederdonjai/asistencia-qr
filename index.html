@@ -136,7 +136,7 @@
       </div>
       <div id="resultado"></div>
     </div>
-    <p class="ayuda" style="text-align:center">Grupo <b id="pieGrupo"></b> · <a href="#" id="lnkActualizar">Actualizar lista</a> · <a href="#" id="lnkCambiar">Cambiar de clave</a></p>
+    <p class="ayuda" style="text-align:center">Grupo <b id="pieGrupo"></b> · <a href="#" id="lnkActualizar">Actualizar lista</a> · <a href="#" id="lnkCambiar">Cerrar sesión</a></p>
   </section>
 
   <!-- ====== CREDENCIALES ====== -->
@@ -210,6 +210,7 @@ function mostrarConfig(){
   $('vistaConfig').classList.remove('oculto');
   ['pestanas','vistaLista','vistaCred'].forEach(id=>$(id).classList.add('oculto'));
   $('cajaGrupo').classList.add('oculto'); $('cfgMsg').innerHTML='';
+  $('subtitulo').textContent = 'Escuela Telesecundaria No. 18 "Netzahualcóyotl"';
   $('cfgClave').value = '';
 }
 
@@ -240,7 +241,15 @@ $('btnCfgGuardar').onclick = async ()=>{
   $('btnCfgGuardar').disabled = false;
 };
 
-$('lnkCambiar').onclick = e=>{ e.preventDefault(); detenerCamara(); mostrarConfig(); };
+$('lnkCambiar').onclick = e=>{
+  e.preventDefault();
+  if(!confirm('¿Cerrar sesión en este teléfono? Para volver a entrar se pedirá la clave.')) return;
+  detenerCamara();
+  try{ Object.keys(localStorage).filter(k=>k.indexOf('asis_')===0).forEach(k=>localStorage.removeItem(k)); }catch(err){}
+  cfg = {}; alumnos = []; marcas = {};
+  $('subtitulo').textContent = 'Escuela Telesecundaria No. 18 "Netzahualcóyotl"';
+  mostrarConfig();
+};
 $('lnkActualizar').onclick = async e=>{
   e.preventDefault();
   try{ usarLista(await llamar({accion:'lista', grupo:cfg.grupo, clave:cfg.clave})); dibujarLista(); mensaje($('resultado'),'Lista actualizada: '+alumnos.length+' alumnos.','ok'); }
