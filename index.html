@@ -192,6 +192,9 @@
       <div class="fila">
         <button class="primario" id="btnGuardar">Guardar en la hoja de asistencia</button>
       </div>
+      <div class="fila oculto" id="filaBorrarDia">
+        <button id="btnBorrarDia" style="background:#fff;color:#b42318;border:1px solid #b42318">🗑 Borrar toda la asistencia de este día</button>
+      </div>
       <div id="resultado"></div>
     </div>
     <p class="ayuda" style="text-align:center">Grupo <b id="pieGrupo"></b> · <a href="#" id="lnkActualizar">Actualizar lista</a> · <a href="#" id="lnkCambiar">Cerrar sesión</a></p>
@@ -860,12 +863,13 @@ $('fecha').onchange = cargarBorrador;
 let estadoDia = null;
 async function consultarEstado(){
   const el = $('estadoDia'), fecha = $('fecha').value;
-  el.innerHTML = ''; estadoDia = null;
+  el.innerHTML = ''; estadoDia = null; $('filaBorrarDia').classList.add('oculto');
   if(!cfg.grupo || !fecha) return;
   try{
     const j = await llamar({accion:'estado', grupo:cfg.grupo, clave:cfg.clave, fecha});
     if(fecha !== $('fecha').value) return;            // cambiaron la fecha mientras consultaba
     estadoDia = j;
+    $('filaBorrarDia').classList.toggle('oculto', !j.registrado);
     const deLaHoja = ()=>{ const m = {}; (j.marcas||[]).forEach(x=>{ m[normalizar(x.nombre)] = x.valor; }); return m; };
     if(!pendiente){ marcas = deLaHoja(); dibujarLista(); }   // sin cambios pendientes: se ve exactamente lo de la hoja
     const d = document.createElement('div');
@@ -1084,6 +1088,25 @@ async function enviar(forzar){
   }
   $('btnGuardar').disabled = false; $('btnGuardar').textContent = 'Guardar en la hoja de asistencia';
 }
+
+/* Borrar todo un día capturado por error (deja la columna vacía en la hoja). */
+$('btnBorrarDia').onclick = async ()=>{
+  if(!estadoDia || !estadoDia.registrado) return;
+  const f = $('fecha').value;
+  if(!confirm('⚠⚠ Se va a BORRAR TODA la asistencia del '+f.split('-').reverse().join('/')+' en la hoja ('+estadoDia.total+' alumnos).\n\nLa columna de ese día quedará vacía.\n\n¿Seguro?')) return;
+  if(!confirm('Última confirmación: ¿BORRAR la asistencia de este día?')) return;
+  const b = $('btnBorrarDia'); b.disabled = true; b.textContent = 'Borrando…';
+  try{
+    const j = await llamar({accion:'guardar', grupo:cfg.grupo, clave:cfg.clave, fecha:f, presentes:[],
+                            borrar:alumnos.map(a=>({np:a.np, nombre:a.nombre})), marcarFaltas:false, forzar:true}, true);
+    if(j.borrados === undefined) throw new Error('El script de Google todavía no tiene la versión que permite BORRAR. Instala el Code.gs nuevo y crea una Nueva versión de la implementación.');
+    try{ localStorage.removeItem(claveBorrador()); }catch(e){}
+    pendiente = false; desbloqueado = false;
+    mensaje($('resultado'), 'Se borró la asistencia de este día ('+j.borrados+' casillas). La columna quedó vacía.', 'ok');
+    consultarEstado();
+  }catch(e){ mensaje($('resultado'), e.message, 'mal'); }
+  b.disabled = false; b.textContent = '🗑 Borrar toda la asistencia de este día';
+};
 
 /* ---------- credenciales ---------- */
 function textoQR(al){ return [PREFIJO, cfg.grupo, al.np, huella(al.nombre)].join('|'); }  // código corto = cuadros más grandes
