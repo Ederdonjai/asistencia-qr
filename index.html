@@ -28,7 +28,33 @@
   .fila{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .fila > *{flex:1}
   .pestanas{display:flex;gap:6px;margin-bottom:12px}
-  .pestanas button{flex:1;background:#fff;border:1px solid var(--borde);color:var(--gris)}
+  .pestanas button{flex:1;background:#fff;border:1px solid var(--borde);color:var(--gris);padding:10px 4px;font-size:.85rem}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+  .kpi{background:var(--fondo);border:1px solid var(--borde);border-radius:10px;padding:8px;text-align:center}
+  .kpi b{display:block;font-size:1.25rem}
+  .kpi span{font-size:.72rem;color:var(--gris)}
+  .kpi.alerta b{color:var(--rojo)}
+  .sec{font-weight:700;margin:14px 0 6px;font-size:.95rem}
+  .barras{display:flex;align-items:flex-end;gap:2px;height:110px;border-bottom:1px solid var(--borde);padding-top:4px}
+  .barras div{flex:1;background:var(--verde);border-radius:3px 3px 0 0;min-width:3px;position:relative}
+  .barras div.bajo{background:var(--rojo)}
+  .ejes{display:flex;justify-content:space-between;font-size:.68rem;color:var(--gris);margin-top:3px}
+  .alum{border-bottom:1px solid var(--borde);padding:8px 2px;cursor:pointer}
+  .alum .top{display:flex;justify-content:space-between;gap:8px;font-size:.9rem}
+  .alum .top b.bajo{color:var(--rojo)}
+  .alum .bar{height:6px;background:#eef1ef;border-radius:3px;margin:5px 0 3px;overflow:hidden}
+  .alum .bar i{display:block;height:100%;background:var(--verde)}
+  .alum .bar i.bajo{background:var(--rojo)}
+  .alum .mini{font-size:.75rem;color:var(--gris)}
+  .detalle{margin-top:8px;font-size:.82rem}
+  table.t{width:100%;border-collapse:collapse;font-size:.82rem}
+  table.t th,table.t td{border-bottom:1px solid var(--borde);padding:6px 4px;text-align:center}
+  table.t th:first-child,table.t td:first-child{text-align:left}
+  table.t tr.clic{cursor:pointer}
+  table.t td.bajo{color:var(--rojo);font-weight:700}
+  .buscar{margin-top:6px}
+  .boton-enlace{display:block;text-align:center;background:var(--verde-claro);color:var(--verde);font-weight:600;text-decoration:none;border-radius:8px;padding:10px;margin:10px 0}
+  .formatos a{display:inline-block;margin:4px 6px 4px 0;padding:6px 10px;border:1px solid var(--borde);border-radius:8px;text-decoration:none;color:var(--verde);font-weight:600;font-size:.85rem}
   .pestanas button.activa{background:var(--verde);color:#fff;border-color:var(--verde)}
   #lector{position:relative;width:100%;border-radius:10px;overflow:hidden;background:#000}
   #lector video,#lector canvas{display:block;width:100%;height:auto}
@@ -112,7 +138,9 @@
 
   <nav class="pestanas oculto" id="pestanas">
     <button id="tabLista" class="activa">Pasar lista</button>
-    <button id="tabCred">Credenciales QR</button>
+    <button id="tabCred">Credenciales</button>
+    <button id="tabEst">Estadísticas</button>
+    <button id="tabEsc" class="oculto">Escuela</button>
   </nav>
 
   <!-- ====== PASAR LISTA ====== -->
@@ -161,6 +189,36 @@
         <div class="fila" style="margin-top:10px"><button class="primario" id="btnImprimir">Imprimir credenciales</button></div>
       </div>
       <div class="credenciales" id="credenciales"></div>
+    </div>
+  </section>
+
+  <!-- ====== ESTADÍSTICAS DEL GRUPO ====== -->
+  <section id="vistaEst" class="oculto">
+    <div class="tarjeta">
+      <b>Estadísticas del grupo <span id="estGrupo"></span></b>
+      <a id="btnFormato" class="boton-enlace oculto" target="_blank" rel="noopener">📄 Abrir mi formato en Google Sheets</a>
+      <label for="estPer">Periodo</label>
+      <select id="estPer">
+        <option value="0">Primer periodo</option><option value="1">Segundo periodo</option>
+        <option value="2">Tercer periodo</option><option value="C">Todo el ciclo</option>
+      </select>
+      <div id="estCont"><p class="ayuda">Cargando…</p></div>
+      <p class="ayuda" style="text-align:center;margin-top:10px"><a href="#" id="lnkEstAct">Actualizar datos</a></p>
+    </div>
+  </section>
+
+  <!-- ====== ESCUELA (solo administrador) ====== -->
+  <section id="vistaEsc" class="oculto">
+    <div class="tarjeta">
+      <b>Estadísticas de la escuela</b>
+      <p class="ayuda">Solo los 9 grupos oficiales. Reunir todos los formatos puede tardar unos segundos.</p>
+      <label for="escPer">Periodo</label>
+      <select id="escPer">
+        <option value="0">Primer periodo</option><option value="1">Segundo periodo</option>
+        <option value="2">Tercer periodo</option><option value="C">Todo el ciclo</option>
+      </select>
+      <div id="escCont"></div>
+      <p class="ayuda" style="text-align:center;margin-top:10px"><a href="#" id="lnkEscAct">Actualizar datos</a></p>
     </div>
   </section>
 </main>
@@ -214,15 +272,16 @@ function pitido(ok){
 /* ---------- configuración ---------- */
 function mostrarConfig(){
   $('vistaConfig').classList.remove('oculto');
-  ['pestanas','vistaLista','vistaCred'].forEach(id=>$(id).classList.add('oculto'));
+  ['pestanas','vistaLista','vistaCred','vistaEst','vistaEsc'].forEach(id=>$(id).classList.add('oculto'));
+  datosGrupo = null; datosEscuela = null;
   $('cajaGrupo').classList.add('oculto'); $('cfgMsg').innerHTML='';
   $('subtitulo').textContent = 'Escuela Telesecundaria No. 18 "Netzahualcóyotl"';
   $('cfgClave').value = '';
 }
 
-async function entrarConGrupo(grupo, clave){
+async function entrarConGrupo(grupo, clave, admin){
   const j = await llamar({accion:'lista', grupo, clave});
-  cfg = {grupo, clave}; escribir('asis_cfg', cfg);
+  cfg = {grupo, clave, admin:!!admin}; escribir('asis_cfg', cfg);
   usarLista(j); iniciarApp();
 }
 
@@ -232,10 +291,10 @@ $('btnCfgGuardar').onclick = async ()=>{
   $('btnCfgGuardar').disabled = true;
   try{
     if(!$('cajaGrupo').classList.contains('oculto') && $('cfgGrupo').value){
-      await entrarConGrupo($('cfgGrupo').value, clave);          // administrador ya eligió grupo
+      await entrarConGrupo($('cfgGrupo').value, clave, true);    // administrador ya eligió grupo
     }else{
       const j = await llamar({accion:'entrar', clave});
-      if(j.grupos.length === 1){ await entrarConGrupo(j.grupos[0], clave); }
+      if(j.grupos.length === 1 && !j.admin){ await entrarConGrupo(j.grupos[0], clave, false); }
       else{                                                      // clave de administrador: elige grupo
         $('cfgGrupo').innerHTML = '';
         j.grupos.forEach(g=>{ const o=document.createElement('option'); o.value=g; o.textContent=g; $('cfgGrupo').appendChild(o); });
@@ -264,7 +323,8 @@ $('lnkActualizar').onclick = async e=>{
 
 function usarLista(j){
   alumnos = j.alumnos || [];
-  escribir('asis_lista_'+cfg.grupo, {alumnos, docente:j.docente||''});
+  if(j.url){ $('btnFormato').href = j.url; $('btnFormato').classList.remove('oculto'); }
+  escribir('asis_lista_'+cfg.grupo, {alumnos, docente:j.docente||'', url:j.url||''});
   $('subtitulo').textContent = 'Grupo ' + cfg.grupo + (j.docente ? ' · ' + j.docente : '');
   const sel = $('credAlumno'); sel.innerHTML = '<option value="">Todo el grupo</option>';
   alumnos.forEach(al=>{ const o=document.createElement('option'); o.value=al.np; o.textContent=al.np+'. '+al.nombre; sel.appendChild(o); });
@@ -283,21 +343,165 @@ function iniciarApp(){
   $('pieGrupo').textContent = cfg.grupo;
   $('credGrupo').textContent = cfg.grupo;
   $('avisoPrueba').classList.toggle('oculto', cfg.grupo !== 'PRUEBA');
+  $('tabEsc').classList.toggle('oculto', !cfg.admin);
+  datosGrupo = null;
   if(!$('fecha').value) $('fecha').value = hoyISO();
   cargarBorrador();
   verPestana('lista');
 }
 
 /* ---------- pestañas ---------- */
+const PESTANAS = {lista:['tabLista','vistaLista'], cred:['tabCred','vistaCred'], est:['tabEst','vistaEst'], esc:['tabEsc','vistaEsc']};
 function verPestana(p){
-  $('tabLista').classList.toggle('activa', p==='lista');
-  $('tabCred').classList.toggle('activa', p==='cred');
-  $('vistaLista').classList.toggle('oculto', p!=='lista');
-  $('vistaCred').classList.toggle('oculto', p!=='cred');
-  if(p==='cred'){ detenerCamara(); dibujarCredenciales(); }
+  Object.keys(PESTANAS).forEach(k=>{
+    $(PESTANAS[k][0]).classList.toggle('activa', k===p);
+    $(PESTANAS[k][1]).classList.toggle('oculto', k!==p);
+  });
+  if(p!=='lista') detenerCamara();
+  if(p==='cred') dibujarCredenciales();
+  if(p==='est') cargarEstadisticas(false);
+  if(p==='esc') cargarEscuela(false);
 }
-$('tabLista').onclick = ()=>verPestana('lista');
-$('tabCred').onclick = ()=>verPestana('cred');
+Object.keys(PESTANAS).forEach(k=>{ $(PESTANAS[k][0]).onclick = ()=>verPestana(k); });
+
+/* ==================== ESTADÍSTICAS ==================== */
+let datosGrupo = null, datosEscuela = null;
+const NOMBRE_PER = ['Primer periodo','Segundo periodo','Tercer periodo'];
+
+function sumar(a,b){ return [a[0]+b[0],a[1]+b[1],a[2]+b[2],a[3]+b[3]]; }
+function cuentaAlumno(al, sel){ return sel==='C' ? al.p.reduce(sumar,[0,0,0,0]) : al.p[+sel]; }
+function porcentaje(c){ const t=c[0]+c[1]+c[2]+c[3]; return t ? (c[0]+c[3])/t : null; }   // (A+R) / días registrados, igual que el formato
+function fmt(p){ return p===null ? '—' : Math.round(p*100)+'%'; }
+function esc(t){ const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+function periodoActual(d){ for(let i=2;i>=0;i--) if(d.periodos[i] && d.periodos[i].dias.length) return String(i); return '0'; }
+function diasDe(d, sel){ return sel==='C' ? d.periodos.flatMap(p=>p.dias) : (d.periodos[+sel] ? d.periodos[+sel].dias : []); }
+function totalGrupo(d, sel){ return d.alumnos.reduce((s,al)=>sumar(s,cuentaAlumno(al,sel)),[0,0,0,0]); }
+
+function kpis(c, alertas, extra){
+  const p = porcentaje(c);
+  return '<div class="kpis">'+
+    '<div class="kpi'+(extra&&p!==null&&p<extra?' alerta':'')+'"><b>'+fmt(p)+'</b><span>Asistencia</span></div>'+
+    '<div class="kpi"><b>'+c[0]+'</b><span>Asistencias</span></div>'+
+    '<div class="kpi"><b>'+c[1]+'</b><span>Faltas</span></div>'+
+    '<div class="kpi"><b>'+c[2]+'</b><span>Justificadas</span></div>'+
+    '<div class="kpi"><b>'+c[3]+'</b><span>Retardos</span></div>'+
+    '<div class="kpi'+(alertas?' alerta':'')+'"><b>'+alertas+'</b><span>Bajo el mínimo</span></div></div>';
+}
+
+function graficaDias(dias, minimo){
+  if(!dias.length) return '<p class="ayuda">Todavía no hay días registrados en este periodo.</p>';
+  const ult = dias.slice(-40);
+  const barras = ult.map(x=>{
+    const t=x.A+x.F+x.J+x.R, p=t?(x.A+x.R)/t:0;
+    return '<div class="'+(p<minimo?'bajo':'')+'" style="height:'+Math.max(3,p*100)+'%" title="'+x.d+'/'+x.m+': '+Math.round(p*100)+'%"></div>';
+  }).join('');
+  const f = x=>String(x.d).padStart(2,'0')+'/'+String(x.m).padStart(2,'0');
+  return '<div class="barras">'+barras+'</div><div class="ejes"><span>'+f(ult[0])+'</span><span>'+
+         (ult.length>2?f(ult[Math.floor(ult.length/2)]):'')+'</span><span>'+f(ult[ult.length-1])+'</span></div>'+
+         '<p class="ayuda">Cada barra es un día ('+ult.length+' días). En rojo, los días por debajo del mínimo.</p>';
+}
+
+function tablaPeriodos(al, minimo){
+  const filas = [0,1,2].map(i=>({n:NOMBRE_PER[i], c:al.p[i]})).concat([{n:'Todo el ciclo', c:cuentaAlumno(al,'C')}]);
+  return '<table class="t"><tr><th>Periodo</th><th>A</th><th>F</th><th>J</th><th>R</th><th>%</th></tr>'+
+    filas.map(f=>{ const p=porcentaje(f.c);
+      return '<tr><td>'+f.n+'</td><td>'+f.c[0]+'</td><td>'+f.c[1]+'</td><td>'+f.c[2]+'</td><td>'+f.c[3]+'</td><td class="'+(p!==null&&p<minimo?'bajo':'')+'">'+fmt(p)+'</td></tr>'; }).join('')+'</table>';
+}
+
+/* Dibuja las estadísticas de un grupo dentro de "cont". */
+function dibujarGrupo(cont, d, sel){
+  const min = d.minimo || 0.8;
+  const lista = d.alumnos.map(al=>{ const c=cuentaAlumno(al,sel); return {al, c, p:porcentaje(c)}; });
+  const alertas = lista.filter(x=>x.p!==null && x.p<min).length;
+  lista.sort((a,b)=>(a.p===null?2:a.p)-(b.p===null?2:b.p));
+  let h = kpis(totalGrupo(d,sel), alertas, min);
+  h += '<div class="sec">Asistencia por día</div>'+graficaDias(diasDe(d,sel), min);
+  h += '<div class="sec">Por alumno <span class="ayuda">(de menor a mayor asistencia · mínimo '+Math.round(min*100)+'%)</span></div>';
+  h += '<input class="buscar" placeholder="Buscar alumno…">';
+  h += '<div class="lista-al">'+lista.map((x,i)=>{
+    const bajo = x.p!==null && x.p<min;
+    return '<div class="alum" data-i="'+i+'"><div class="top"><span>'+esc(x.al.nombre)+'</span><b class="'+(bajo?'bajo':'')+'">'+fmt(x.p)+'</b></div>'+
+      '<div class="bar"><i class="'+(bajo?'bajo':'')+'" style="width:'+(x.p===null?0:x.p*100)+'%"></i></div>'+
+      '<div class="mini">A '+x.c[0]+' · F '+x.c[1]+' · J '+x.c[2]+' · R '+x.c[3]+(bajo?' · ⚠ bajo el mínimo':'')+'</div>'+
+      '<div class="detalle oculto"></div></div>';
+  }).join('')+'</div>';
+  cont.innerHTML = h;
+  cont.querySelectorAll('.alum').forEach(el=>{
+    el.onclick = ()=>{
+      const det = el.querySelector('.detalle');
+      if(det.classList.contains('oculto')){ det.innerHTML = tablaPeriodos(lista[+el.dataset.i].al, min); det.classList.remove('oculto'); }
+      else det.classList.add('oculto');
+    };
+  });
+  cont.querySelector('.buscar').oninput = e=>{
+    const q = normalizar(e.target.value);
+    cont.querySelectorAll('.alum').forEach(el=>{ el.style.display = normalizar(lista[+el.dataset.i].al.nombre).includes(q) ? '' : 'none'; });
+  };
+}
+
+async function cargarEstadisticas(forzar){
+  $('estGrupo').textContent = cfg.grupo;
+  if(datosGrupo && datosGrupo.grupo===cfg.grupo && !forzar){ dibujarGrupo($('estCont'), datosGrupo, $('estPer').value); return; }
+  $('estCont').innerHTML = '<p class="ayuda">Cargando estadísticas…</p>';
+  try{
+    const j = await llamar({accion:'estadisticas', grupo:cfg.grupo, clave:cfg.clave});
+    datosGrupo = j.datos;
+    if(!forzar) $('estPer').value = periodoActual(datosGrupo);
+    dibujarGrupo($('estCont'), datosGrupo, $('estPer').value);
+  }catch(e){ mensaje($('estCont'), e.message, 'mal'); }
+}
+$('estPer').onchange = ()=>{ if(datosGrupo) dibujarGrupo($('estCont'), datosGrupo, $('estPer').value); };
+$('lnkEstAct').onclick = e=>{ e.preventDefault(); cargarEstadisticas(true); };
+
+/* ---------- escuela (administrador) ---------- */
+let grupoAbierto = null;
+function dibujarEscuela(){
+  const cont = $('escCont'), sel = $('escPer').value, gs = datosEscuela.grupos.filter(g=>!g.error);
+  if(grupoAbierto){
+    const d = gs.find(g=>g.grupo===grupoAbierto);
+    cont.innerHTML = '<p><a href="#" id="volverEsc">← Todos los grupos</a></p><div class="sec">Grupo '+esc(d.grupo)+' · '+esc(d.docente||'')+'</div><a class="boton-enlace" target="_blank" rel="noopener" href="'+esc(d.url||'')+'">📄 Abrir el formato de '+esc(d.grupo)+'</a><div id="escGrupo"></div>';
+    $('volverEsc').onclick = e=>{ e.preventDefault(); grupoAbierto=null; dibujarEscuela(); };
+    dibujarGrupo($('escGrupo'), d, sel); return;
+  }
+  const hoy = new Date(), dHoy = hoy.getDate(), mHoy = hoy.getMonth()+1;
+  let total=[0,0,0,0], alertas=0, alumnos=0; const peores=[];
+  const filas = gs.map(d=>{
+    const min=d.minimo||0.8, c=totalGrupo(d,sel); total=sumar(total,c); alumnos+=d.alumnos.length;
+    let al=0; d.alumnos.forEach(a=>{ const p=porcentaje(cuentaAlumno(a,sel)); if(p!==null&&p<min){ al++; peores.push({g:d.grupo,a,p}); } });
+    alertas+=al;
+    const pasoHoy = d.periodos.some(p=>p.dias.some(x=>x.d===dHoy && x.m===mHoy));
+    const p=porcentaje(c);
+    return '<tr class="clic" data-g="'+esc(d.grupo)+'"><td><b>'+esc(d.grupo)+'</b><br><span class="ayuda">'+esc((d.docente||'').replace(/^MTR[OA]\.\s*/,''))+'</span></td>'+
+      '<td class="'+(p!==null&&p<min?'bajo':'')+'">'+fmt(p)+'</td><td>'+c[1]+'</td><td>'+c[2]+'</td><td>'+c[3]+'</td><td>'+al+'</td><td>'+(pasoHoy?'✅':'—')+'</td></tr>';
+  }).join('');
+  peores.sort((x,y)=>x.p-y.p);
+  let h = '<div class="ayuda" style="margin-top:8px">'+gs.length+' grupos · '+alumnos+' alumnos</div>'+kpis(total, alertas, 0.8);
+  h += '<div class="sec">Por grupo <span class="ayuda">(toca un grupo para ver a sus alumnos)</span></div>';
+  h += '<table class="t"><tr><th>Grupo</th><th>%</th><th>F</th><th>J</th><th>R</th><th>⚠</th><th>Hoy</th></tr>'+filas+'</table>';
+  h += '<p class="ayuda">⚠ = alumnos bajo el mínimo · Hoy = el grupo ya pasó lista hoy.</p>';
+  if(peores.length){
+    h += '<div class="sec">Alumnos con menor asistencia de la escuela</div><table class="t"><tr><th>Alumno</th><th>Grupo</th><th>%</th></tr>'+
+      peores.slice(0,15).map(x=>'<tr class="clic" data-g="'+esc(x.g)+'"><td>'+esc(x.a.nombre)+'</td><td>'+esc(x.g)+'</td><td class="bajo">'+fmt(x.p)+'</td></tr>').join('')+'</table>';
+  }
+  h += '<div class="sec">Formatos en Google Sheets</div><div class="formatos">'+
+    '<a href="'+esc(datosEscuela.carpeta||'')+'" target="_blank" rel="noopener">📁 Carpeta de la escuela</a>'+
+    datosEscuela.grupos.map(g=>'<a href="'+esc(g.url||'')+'" target="_blank" rel="noopener">📄 '+esc(g.grupo)+'</a>').join('')+'</div>';
+  const err = datosEscuela.grupos.filter(g=>g.error);
+  if(err.length) h += '<p class="ayuda" style="color:var(--rojo)">No se pudo leer: '+err.map(g=>esc(g.grupo)).join(', ')+'</p>';
+  cont.innerHTML = h;
+  cont.querySelectorAll('tr.clic').forEach(tr=>{ tr.onclick = ()=>{ grupoAbierto = tr.dataset.g; dibujarEscuela(); window.scrollTo(0,0); }; });
+}
+async function cargarEscuela(forzar){
+  if(datosEscuela && !forzar){ dibujarEscuela(); return; }
+  $('escCont').innerHTML = '<p class="ayuda">Reuniendo los 9 formatos… puede tardar hasta un minuto.</p>';
+  try{
+    datosEscuela = await llamar({accion:'escuela', clave:cfg.clave});
+    if(!forzar){ const g = datosEscuela.grupos.find(x=>!x.error); if(g) $('escPer').value = periodoActual(g); }
+    grupoAbierto = null; dibujarEscuela();
+  }catch(e){ mensaje($('escCont'), e.message, 'mal'); }
+}
+$('escPer').onchange = ()=>{ if(datosEscuela) dibujarEscuela(); };
+$('lnkEscAct').onclick = e=>{ e.preventDefault(); cargarEscuela(true); };
 
 /* ---------- lista y marcas ---------- */
 function cargarBorrador(){ marcas = leer(claveBorrador()) || {}; $('resultado').innerHTML=''; dibujarLista(); consultarEstado(); }
