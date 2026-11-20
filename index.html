@@ -372,7 +372,7 @@ $('lnkCambiar').onclick = e=>{
 };
 $('lnkActualizar').onclick = async e=>{
   e.preventDefault();
-  try{ usarLista(await llamar({accion:'lista', grupo:cfg.grupo, clave:cfg.clave})); dibujarLista(); mensaje($('resultado'),'Lista actualizada: '+alumnos.length+' alumnos.','ok'); }
+  try{ usarLista(await llamar({accion:'lista', grupo:cfg.grupo, clave:cfg.clave})); dibujarLista(); consultarEstado(); mensaje($('resultado'),'Lista y asistencia actualizadas desde la hoja: '+alumnos.length+' alumnos.','ok'); }
   catch(err){ mensaje($('resultado'), err.message, 'mal'); }
 };
 
@@ -532,11 +532,11 @@ opciones($('estPer'), OPC_ASIS, '0');
 
 async function cargarEstadisticas(forzar){
   $('estGrupo').textContent = cfg.grupo;
-  if(datosGrupo && datosGrupo.grupo===cfg.grupo && !forzar){ dibujarEst(); return; }
+  if(datosGrupo && datosGrupo.grupo===cfg.grupo && !forzar && Date.now()-datosGrupo._t < 60000){ dibujarEst(); return; }
   $('estCont').innerHTML = '<p class="ayuda">Cargando estadísticas…</p>';
   try{
     const j = await llamar({accion:'estadisticas', grupo:cfg.grupo, clave:cfg.clave});
-    datosGrupo = j.datos;
+    datosGrupo = j.datos; datosGrupo._t = Date.now();
     if(!forzar){
       if($('estTipo').value==='cal') opciones($('estPer'), OPC_CAL, periodoCalActual(datosGrupo));
       else opciones($('estPer'), OPC_ASIS, periodoActual(datosGrupo));
@@ -828,7 +828,26 @@ $('btnGuardarCal').onclick = async ()=>{
 };
 
 /* ---------- lista y marcas ---------- */
-function cargarBorrador(){ marcas = leer(claveBorrador()) || {}; $('resultado').innerHTML=''; dibujarLista(); consultarEstado(); }
+/* La hoja de Google Sheets manda. En el teléfono solo se conservan los cambios que todavía NO se guardan
+   (por si se va el internet). Al abrir una fecha sin cambios pendientes, se muestra lo que hay en la hoja. */
+let pendiente = false;
+let desbloqueado = false;   // en un día ya capturado, el maestro debe confirmar antes de modificarlo
+
+/* Candado: si el día ya está guardado en la hoja, pregunta una vez antes de permitir cambios. */
+function puedeModificar(){
+  if(desbloqueado || pendiente || !estadoDia || !estadoDia.registrado) return true;
+  if(confirm('⚠ Este día ya está capturado en la hoja ('+estadoDia.total+' alumnos).\n\n¿Quieres MODIFICARLO?\n\nSi no fue tu intención, presiona Cancelar y no se cambiará nada.')){
+    desbloqueado = true; return true;
+  }
+  return false;
+}
+function cargarBorrador(){
+  const b = leer(claveBorrador());
+  if(b && b.p){ marcas = b.m || {}; pendiente = true; }     // cambios sin guardar de este teléfono
+  else { marcas = {}; pendiente = false; }                  // se llenará con lo que diga la hoja
+  desbloqueado = false;
+  $('resultado').innerHTML=''; dibujarLista(); consultarEstado();
+}
 $('fecha').onchange = cargarBorrador;
 
 /* ---------- ¿ya se registró este día? ---------- */
@@ -841,22 +860,27 @@ async function consultarEstado(){
     const j = await llamar({accion:'estado', grupo:cfg.grupo, clave:cfg.clave, fecha});
     if(fecha !== $('fecha').value) return;            // cambiaron la fecha mientras consultaba
     estadoDia = j;
+    const deLaHoja = ()=>{ const m = {}; (j.marcas||[]).forEach(x=>{ m[normalizar(x.nombre)] = x.valor; }); return m; };
+    if(!pendiente){ marcas = deLaHoja(); dibujarLista(); }   // sin cambios pendientes: se ve exactamente lo de la hoja
     const d = document.createElement('div');
     if(!j.existe){
       d.className='estado info'; d.textContent='Esta fecha no aparece en la hoja de asistencia (fin de semana o fuera del ciclo).';
+    }else if(pendiente){
+      d.className='estado ya';
+      d.innerHTML = '<b>⚠ Tienes cambios en este teléfono que todavía no se guardan en la hoja.</b><br>';
+      d.appendChild(document.createTextNode(j.registrado
+        ? 'En la hoja este día tiene '+j.total+' alumnos registrados. Guarda para actualizarla o descarta tus cambios para ver lo de la hoja.'
+        : 'En la hoja este día está vacío. Presiona Guardar para registrarlo.'));
+      const b = document.createElement('button'); b.textContent = 'Descartar mis cambios y ver lo de la hoja';
+      b.onclick = ()=>{ if(!confirm('¿Descartar los cambios sin guardar de este día?')) return;
+        try{ localStorage.removeItem(claveBorrador()); }catch(e){}
+        pendiente = false; marcas = deLaHoja(); dibujarLista(); consultarEstado(); };
+      d.appendChild(b);
     }else if(j.registrado){
       const c = j.conteo;
-      d.className='estado ya';
-      d.innerHTML = '<b>⚠ Este día ya tiene asistencia registrada.</b><br>';
-      d.appendChild(document.createTextNode(j.total+' alumnos · A: '+c.A+' · R: '+c.R+' · J: '+c.J+' · F: '+c.F+
-        (j.incidencia ? ' · Incidencia: '+j.incidencia : '')+
-        '. Si guardas otra vez, la hoja se actualizará con lo que marques ahora.'));
-      const b = document.createElement('button'); b.textContent = 'Cargar lo guardado para revisar o corregir';
-      b.onclick = ()=>{
-        marcas = {}; j.marcas.forEach(m=>{ marcas[normalizar(m.nombre)] = m.valor; });
-        guardarBorrador(); mensaje($('resultado'),'Se cargó lo guardado. Corrige tocando los nombres y presiona Guardar.','ok');
-      };
-      d.appendChild(b);
+      d.className='estado info';
+      d.textContent = 'Lo que ves es lo que está guardado en la hoja: '+j.total+' alumnos · A: '+c.A+' · R: '+c.R+' · J: '+c.J+' · F: '+c.F+
+        (j.incidencia ? ' · Incidencia: '+j.incidencia : '')+'. Puedes corregir y volver a guardar.';
     }else if(j.incidencia){
       d.className='estado info'; d.textContent='Este día tiene registrada la incidencia: '+j.incidencia+'.';
     }else return;
@@ -874,13 +898,13 @@ function dibujarLista(){
     li.innerHTML = '<span class="np"></span><span class="nom"></span><span class="chip '+m+'">'+(m||'—')+'</span>';
     li.querySelector('.np').textContent = al.np;
     li.querySelector('.nom').textContent = al.nombre;
-    li.onclick = ()=>{ const sig = {'':'A','A':'R','R':'J','J':'F','F':''}[m]; if(sig) marcas[llave(al)]=sig; else delete marcas[llave(al)]; guardarBorrador(); };
+    li.onclick = ()=>{ if(!puedeModificar()) return; const sig = {'':'A','A':'R','R':'J','J':'F','F':''}[m]; if(sig) marcas[llave(al)]=sig; else delete marcas[llave(al)]; guardarBorrador(); };
     ul.appendChild(li);
   });
   const total = alumnos.length;
   $('contador').innerHTML = 'Registrados: <b>'+(a+r+jj)+' de '+total+'</b> · A: '+a+' · R: '+r+' · J: '+jj+(ff?' · F: '+ff:'')+' · Sin registro: '+(total-a-r-jj-ff);
 }
-function guardarBorrador(){ escribir(claveBorrador(), marcas); dibujarLista(); }
+function guardarBorrador(){ pendiente = true; escribir(claveBorrador(), {m:marcas, p:true}); dibujarLista(); }
 
 /* ---------- cámara (varias credenciales a la vez) ---------- */
 $('btnCamara').onclick = ()=> camaraActiva ? detenerCamara() : abrirCamara();
@@ -909,6 +933,7 @@ async function crearDetector(){
 }
 
 async function abrirCamara(){
+  if(!puedeModificar()) return;
   try{
     detectar = detectar || await crearDetector();
     flujo = await navigator.mediaDevices.getUserMedia({audio:false,
@@ -1009,9 +1034,20 @@ $('btnGuardar').onclick = ()=>enviar(false);
 async function enviar(forzar){
   const presentes = alumnos.filter(a=>marcas[llave(a)]).map(a=>({np:a.np, nombre:a.nombre, tipo:marcas[llave(a)]}));
   const faltan = alumnos.length - presentes.length;
-  if(!forzar && estadoDia && estadoDia.registrado &&
-     !confirm('Este día ya tenía asistencia registrada ('+estadoDia.total+' alumnos).\nSi continúas, se actualizará con lo que marcaste ahora. ¿Continuar?')) return;
-  if(!forzar && $('marcarFaltas').checked && faltan>0 &&
+  // Día ya capturado: mostrar exactamente qué alumnos cambiarían y pedir confirmación.
+  if(!forzar && estadoDia && estadoDia.registrado){
+    const enHoja = {}; (estadoDia.marcas||[]).forEach(x=>{ enHoja[normalizar(x.nombre)] = x.valor; });
+    const mf = $('marcarFaltas').checked, cambios = [];
+    alumnos.forEach(a=>{
+      const k = llave(a), antes = enHoja[k] || '', nuevo = marcas[k] || '';
+      const despues = nuevo || ((antes==='' || antes==='F') && mf ? 'F' : antes);   // así guarda el script
+      if(antes !== despues) cambios.push('• '+a.nombre+': '+(antes||'vacío')+' → '+despues);
+    });
+    if(!cambios.length){ mensaje($('resultado'),'No hay cambios: lo que ves ya es lo que está en la hoja.','ok'); return; }
+    if(!confirm('⚠ Este día ya estaba capturado. Se van a CAMBIAR '+cambios.length+' alumno(s):\n\n'+cambios.slice(0,15).join('\n')+
+                (cambios.length>15 ? '\n… y '+(cambios.length-15)+' más' : '')+'\n\n¿Confirmas estos cambios?')) return;
+  }
+  else if(!forzar && $('marcarFaltas').checked && faltan>0 &&
      !confirm('Se pondrá F a '+faltan+' alumno(s) sin registro. ¿Continuar?')) return;
   $('btnGuardar').disabled = true; $('btnGuardar').textContent = 'Guardando…';
   try{
@@ -1021,6 +1057,8 @@ async function enviar(forzar){
     if(j.faltas.length) t += '\nFaltaron: '+j.faltas.join(', ');
     if(j.noEncontrados.length) t += '\nNo encontrados en la hoja: '+j.noEncontrados.join(', ');
     mensaje($('resultado'), t, 'ok');
+    try{ localStorage.removeItem(claveBorrador()); }catch(e){}   // ya está en la hoja: el teléfono deja de guardar copia
+    pendiente = false; desbloqueado = false;   // vuelve a quedar protegido
     consultarEstado();
   }catch(e){
     if(e.datos && e.datos.incidencia && confirm(e.message+'\n\n¿Guardar de todos modos?')){ $('btnGuardar').disabled=false; $('btnGuardar').textContent='Guardar en la hoja de asistencia'; return enviar(true); }
@@ -1050,6 +1088,16 @@ function dibujarCredenciales(){
 $('btnImprimir').onclick = ()=>window.print();
 $('tamano').onchange = dibujarCredenciales;
 $('credAlumno').onchange = dibujarCredenciales;
+
+/* ---------- actualización automática desde la hoja ----------
+   Si alguien cambia o borra la asistencia directamente en Sheets, la página lo refleja sola:
+   al volver a la página y cada 30 segundos (solo en "Pasar lista", sin cámara abierta y sin cambios pendientes). */
+function refrescarDesdeHoja(){
+  if(!cfg.grupo || pendiente || camaraActiva || pestanaActual !== 'lista' || document.hidden) return;
+  consultarEstado();
+}
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refrescarDesdeHoja(); });
+setInterval(refrescarDesdeHoja, 30000);
 
 /* ---------- inicio ---------- */
 (async function(){
